@@ -14,7 +14,7 @@ A local-first music player that runs entirely in your browser. This application 
 - **Data Persistence**: Your library index is stored in your browser's local cache via **'IndexedDB'**.
 - **Audio Files**:
   - **Chrome/Edge (Desktop)**: The app uses the **File System Access API** to create read-only references to your files. This means your files are *not* duplicated into the local browser cache, resulting in minimal storage usage.
-  - **Safari/Firefox (and Mobile)**: Due to browser security limitations preventing persistent file access, the app imports file copies into local browser cache via 'IndexedDB' to allow playback after a page refresh. **(This results in storage usage equal to the size of your music library).**
+  - **Safari/Firefox (and Mobile)**: Due to browser security limitations preventing persistent file access, the app imports file copies into local browser cache via 'IndexedDB' to allow playback after a page refresh. **(This results in storage usage equal to the size of your music library).** This cache can be cleared any time in the website or your browser's settings.
 - **Clearing Storage**: You can reset your library and clear all stored data via the **Settings** menu.
 
 ## Tech Stack
