@@ -12,7 +12,7 @@ import { useLibrary } from './hooks/useLibrary';
 import { useAudio } from './hooks/useAudio';
 
 
-import { FolderPlus, Settings } from 'lucide-react';
+import { FolderPlus, Settings, Download } from 'lucide-react';
 import { Box, Typography, Button, IconButton, ToggleButton, ToggleButtonGroup, LinearProgress, Chip, TextField, InputAdornment, Autocomplete, ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 
 function App() {
@@ -42,6 +42,31 @@ function App() {
   const [filters, setFilters] = useState([]); // Array of { id, type, value }
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [themeMode, setThemeMode] = useState('dark');
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      // Prevent the mini-infobar from appearing on mobile
+      e.preventDefault();
+      // Stash the event so it can be triggered later.
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   const fileInputRef = useRef(null);
 
@@ -216,6 +241,11 @@ function App() {
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Typography variant="h6" sx={{ fontWeight: 700 }}>Music</Typography>
             <Box sx={{ display: 'flex', gap: 1 }}>
+              {deferredPrompt && (
+                <IconButton size="small" onClick={handleInstallClick} color="primary">
+                  <Download size={20} />
+                </IconButton>
+              )}
               <IconButton size="small" onClick={() => setSettingsOpen(true)}>
                 <Settings size={20} />
               </IconButton>
