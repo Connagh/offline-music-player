@@ -332,7 +332,7 @@ function App() {
             <LinearProgress variant="determinate" value={progress.total > 0 ? (progress.current / progress.total) * 100 : 0} sx={{ height: 2, borderRadius: 1 }} />
           </Box>
         )}
-        <TrackList tracks={filteredTracks} onPlay={handlePlay} onFilter={handleFilter} currentTrack={currentTrack} isPlaying={isPlaying} />
+        <TrackList tracks={filteredTracks} onPlay={handlePlay} onFilter={handleFilter} currentTrack={currentTrack} isPlaying={isPlaying} isLibraryEmpty={tracks.length === 0} />
       </Box>
 
       <Box sx={{

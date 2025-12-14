@@ -20,7 +20,7 @@ const CoverImage = React.memo(({ blob }) => {
     return <img src={src} alt="Cover" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />;
 });
 
-export function TrackList({ tracks, onPlay, onFilter, currentTrack }) {
+export function TrackList({ tracks, onPlay, onFilter, currentTrack, isLibraryEmpty }) {
     const [sortConfig, setSortConfig] = React.useState({ key: null, direction: 'ascending' });
 
     const sortedTracks = useMemo(() => {
@@ -145,16 +145,33 @@ export function TrackList({ tracks, onPlay, onFilter, currentTrack }) {
         virtuosoRef.current?.scrollToIndex({ index: 0 });
     }, [sortConfig]);
 
+    if (isLibraryEmpty) {
+        return <WelcomeGuide />;
+    }
+
+    if (sortedTracks.length === 0) {
+        return (
+            <Box sx={{
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'text.secondary',
+                flexDirection: 'column',
+                gap: 2
+            }}>
+                <Typography variant="body1">No results found</Typography>
+                <Typography variant="caption">Try adjusting your filters</Typography>
+            </Box>
+        );
+    }
+
     return (
-        sortedTracks.length === 0 ? (
-            <WelcomeGuide />
-        ) : (
-            <Virtuoso
-                ref={virtuosoRef}
-                style={{ height: '100%' }}
-                data={sortedTracks}
-                itemContent={itemContent}
-            />
-        )
+        <Virtuoso
+            ref={virtuosoRef}
+            style={{ height: '100%' }}
+            data={sortedTracks}
+            itemContent={itemContent}
+        />
     );
 }
