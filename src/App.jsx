@@ -348,6 +348,8 @@ function App() {
         onImport={importUserData}
       />
       <IOSWarningSnackbar />
+      {/* Hidden Audio Element */}
+      <audio ref={audioRef} />
     </ThemeProvider>
   );
 }
