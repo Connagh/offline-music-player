@@ -164,120 +164,150 @@ function App() {
   return (
     <>
       <Box sx={{
-        p: 2,
         bgcolor: 'rgba(9, 9, 11, 0.95)',
         backdropFilter: 'blur(12px)',
-        position: 'sticky',
+        position: 'fixed', // Anchored to viewport
         top: 0,
+        left: 0,
+        right: 0,
         zIndex: 20,
         borderBottom: '1px solid',
         borderColor: 'divider',
         display: 'flex',
-        flexDirection: 'column',
-        gap: 2
+        justifyContent: 'center' // Center the inner content
       }}>
-        {/* Top Row: Title + Settings */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>Music</Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <IconButton size="small" onClick={() => setSettingsOpen(true)}>
-              <Settings size={20} />
-            </IconButton>
-            <IconButton size="small" onClick={handleFolderSelect}>
-              <FolderPlus size={20} />
-            </IconButton>
+        <Box sx={{
+          width: '100%',
+          maxWidth: 412, // Maintain mobile width for internal content
+          p: 2,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2
+        }}>
+          {/* Top Row: Title + Settings */}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>Music</Typography>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <IconButton size="small" onClick={() => setSettingsOpen(true)}>
+                <Settings size={20} />
+              </IconButton>
+              <IconButton size="small" onClick={handleFolderSelect}>
+                <FolderPlus size={20} />
+              </IconButton>
+            </Box>
           </Box>
+
+          {/* Search Bar */}
+          <Autocomplete
+            multiple
+            freeSolo
+            id="library-search"
+            options={searchOptions}
+            getOptionLabel={(option) => {
+              if (typeof option === 'string') return option;
+              return option.label;
+            }}
+            value={calculateAutocompleteValue}
+            onChange={handleAutocompleteChange}
+            isOptionEqualToValue={(option, value) => option.type === value.type && option.label === value.label}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => {
+                const { key, ...tagProps } = getTagProps({ index });
+                return (
+                  <Chip
+                    key={key}
+                    variant="filled"
+                    label={`${option.label}`}
+                    size="small"
+                    color="primary"
+                    {...tagProps}
+                  />
+                );
+              })
+            }
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                variant="outlined"
+                placeholder={filters.length > 0 ? "" : "Search songs, artists..."}
+                size="small"
+                fullWidth
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 3,
+                    bgcolor: 'background.paper'
+                  }
+                }}
+              />
+            )}
+          />
+
+          {/* Hidden File Input */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFallbackInput}
+            webkitdirectory=""
+            directory=""
+            multiple
+            style={{ display: 'none' }}
+          />
         </Box>
-
-        {/* Search Bar */}
-        <Autocomplete
-          multiple
-          freeSolo
-          id="library-search"
-          options={searchOptions}
-          getOptionLabel={(option) => {
-            if (typeof option === 'string') return option;
-            return option.label;
-          }}
-          value={calculateAutocompleteValue}
-          onChange={handleAutocompleteChange}
-          isOptionEqualToValue={(option, value) => option.type === value.type && option.label === value.label}
-          renderTags={(value, getTagProps) =>
-            value.map((option, index) => {
-              const { key, ...tagProps } = getTagProps({ index });
-              return (
-                <Chip
-                  key={key}
-                  variant="filled"
-                  label={`${option.label}`}
-                  size="small"
-                  color="primary"
-                  {...tagProps}
-                />
-              );
-            })
-          }
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              variant="outlined"
-              placeholder={filters.length > 0 ? "" : "Search songs, artists..."}
-              size="small"
-              fullWidth
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 3,
-                  bgcolor: 'background.paper'
-                }
-              }}
-            />
-          )}
-        />
-
-        {/* Hidden File Input */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFallbackInput}
-          webkitdirectory=""
-          directory=""
-          multiple
-          style={{ display: 'none' }}
-        />
       </Box>
 
-      {isScanning && (
-        <Box sx={{ px: 2, py: 1, bgcolor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider' }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-            <Typography variant="caption" color="text.secondary">Scanning...</Typography>
-            <Typography variant="caption" color="text.secondary">
-              {progress.current} / {progress.total}
-            </Typography>
+      {/* Main Content Area - Scrollable with Padding for Fixed Bars */}
+      {/* Header is roughly 120px tall, Footer is 140px tall. Adding padding to body content */}
+      <Box sx={{
+        flex: 1,
+        overflow: 'hidden',
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        pt: '130px', // Space for fixed header
+        pb: '140px', // Space for fixed footer
+      }}>
+        {isScanning && (
+          <Box sx={{ px: 2, py: 1, bgcolor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">Scanning...</Typography>
+              <Typography variant="caption" color="text.secondary">
+                {progress.current} / {progress.total}
+              </Typography>
+            </Box>
+            <LinearProgress variant="determinate" value={progress.total > 0 ? (progress.current / progress.total) * 100 : 0} sx={{ height: 2, borderRadius: 1 }} />
           </Box>
-          <LinearProgress variant="determinate" value={progress.total > 0 ? (progress.current / progress.total) * 100 : 0} sx={{ height: 2, borderRadius: 1 }} />
-        </Box>
-      )}
-
-      {/* Main Content Area - Scrollable */}
-      <Box sx={{ flex: 1, overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+        )}
         <TrackList tracks={filteredTracks} onPlay={handlePlay} onFilterChange={handleFilter} currentTrack={currentTrack} isPlaying={isPlaying} />
       </Box>
 
-      {/* Player Bar - Sticky Bottom */}
-      <Box sx={{ position: 'sticky', bottom: 0, zIndex: 20 }}>
-        <PlayerBar
-          isPlaying={isPlaying}
-          onTogglePlay={togglePlay}
-          currentTrack={currentTrack}
-          currentTime={currentTime}
-          duration={duration}
-          onSeek={seek}
-          volume={volume}
-          onVolumeChange={changeVolume}
-          onFilter={handleFilter}
-          onNext={() => playNext()}
-          onPrevious={() => playPrevious()}
-        />
+      {/* Player Bar - Anchored Fixed Bottom */}
+      <Box sx={{
+        position: 'fixed',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 20,
+        display: 'flex',
+        justifyContent: 'center',
+        bgcolor: '#191A23', // Background needs to be on container to cover full width
+        borderTop: '1px solid',
+        borderColor: 'divider',
+      }}>
+        <Box sx={{ width: '100%', maxWidth: 412 }}>
+          <PlayerBar
+            isPlaying={isPlaying}
+            onTogglePlay={togglePlay}
+            currentTrack={currentTrack}
+            currentTime={currentTime}
+            duration={duration}
+            onSeek={seek}
+            volume={volume}
+            onVolumeChange={changeVolume}
+            onFilter={handleFilter}
+            onNext={() => playNext()}
+            onPrevious={() => playPrevious()}
+          />
+        </Box>
       </Box>
 
       <SettingsDialog
