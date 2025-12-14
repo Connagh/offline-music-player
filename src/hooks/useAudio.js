@@ -67,30 +67,37 @@ export function useAudio(onTrackEnd) {
         return cleanupArtwork;
     }, [currentTrack]);
 
+    // Ref to hold latest version of functions to avoid stale closures in Media Session handlers
+    const handlersRef = useRef({ playNext, playPrevious, seek });
+    useEffect(() => {
+        handlersRef.current = { playNext, playPrevious, seek };
+    }, [playNext, playPrevious, seek]);
+
     useEffect(() => {
         if (!('mediaSession' in navigator)) return;
 
-        navigator.mediaSession.setActionHandler('play', () => {
-            // Use ref logic or togglePlay logic if stable
-            // Since we can't easily access 'togglePlay' safely if it depends on state that might be stale in a closure
-            // unless we re-register. But pure refs are safer.
-            // Actually, audioRef is stable.
-            audioRef.current.play().catch(e => console.error("Play failed", e));
-            setIsPlaying(true);
+        navigator.mediaSession.setActionHandler('play', async () => {
+            try {
+                // Resume playback
+                await audioRef.current.play();
+                setIsPlaying(true);
+            } catch (e) {
+                console.error("Play failed", e);
+            }
         });
         navigator.mediaSession.setActionHandler('pause', () => {
             audioRef.current.pause();
             setIsPlaying(false);
         });
         navigator.mediaSession.setActionHandler('previoustrack', () => {
-            playPrevious();
+            handlersRef.current.playPrevious();
         });
         navigator.mediaSession.setActionHandler('nexttrack', () => {
-            playNext();
+            handlersRef.current.playNext();
         });
         navigator.mediaSession.setActionHandler('seekto', (details) => {
             if (details.seekTime !== undefined) {
-                seek(details.seekTime);
+                handlersRef.current.seek(details.seekTime);
             }
         });
 
@@ -102,8 +109,7 @@ export function useAudio(onTrackEnd) {
             navigator.mediaSession.setActionHandler('nexttrack', null);
             navigator.mediaSession.setActionHandler('seekto', null);
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [queue]); // Re-bind when queue changes to ensure next/prev work correct (though they use refs internally in some designs, here playNext depends on queue/currentTrack state linkage)
+    }, []); // Only bind once
 
     useEffect(() => {
         if (!('mediaSession' in navigator)) return;
