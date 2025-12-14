@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
 export function useAudio(onTrackEnd) {
-    const audioRef = useRef(new Audio());
+    const audioRef = useRef(null); // Ref will be attached to <audio> element in App
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
@@ -74,9 +74,8 @@ export function useAudio(onTrackEnd) {
         navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
     }, [isPlaying]);
 
-
-
     const togglePlay = useCallback(() => {
+        if (!audioRef.current) return;
         if (audioRef.current.paused) {
             audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error);
         } else {
@@ -86,6 +85,7 @@ export function useAudio(onTrackEnd) {
     }, []);
 
     const playTrack = useCallback(async (track, newQueue = null) => {
+        if (!audioRef.current) return;
         if (newQueue) {
             setQueue(newQueue);
             // Ref will update in effect, but for immediate sync in this function if we were to use it:
@@ -196,6 +196,7 @@ export function useAudio(onTrackEnd) {
     }, [playTrack]); // playTrack needs to be stable or we need to fix playTrack too.
 
     const playPrevious = useCallback(() => {
+        if (!audioRef.current) return;
         // If > 3 seconds in, restart song
         if (audioRef.current.currentTime > 3) {
             audioRef.current.currentTime = 0;
@@ -214,6 +215,7 @@ export function useAudio(onTrackEnd) {
     }, [playTrack]);
 
     const seek = useCallback((time) => {
+        if (!audioRef.current) return;
         if (Number.isFinite(time)) {
             audioRef.current.currentTime = time;
             setCurrentTime(time);
@@ -221,12 +223,14 @@ export function useAudio(onTrackEnd) {
     }, []);
 
     const changeVolume = useCallback((vol) => {
+        if (!audioRef.current) return;
         audioRef.current.volume = vol;
         setVolume(vol);
     }, []);
 
     useEffect(() => {
         const audio = audioRef.current; // Stable ref
+        if (!audio) return;
 
         const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
         const handleDurationChange = () => setDuration(audio.duration);
@@ -280,6 +284,7 @@ export function useAudio(onTrackEnd) {
     // might reset the session or handlers when the audio source changes.
     useEffect(() => {
         if (!('mediaSession' in navigator)) return;
+        if (!audioRef.current) return;
 
         const handlePlay = async () => {
             try {
@@ -332,6 +337,7 @@ export function useAudio(onTrackEnd) {
     }, [currentTrack, playNext, playPrevious, seek]);
 
     return {
+        audioRef, // EXPOSED REF
         isPlaying,
         currentTime,
         duration,

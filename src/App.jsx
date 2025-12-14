@@ -16,6 +16,7 @@ function App() {
   const { tracks, isScanning, progress, addFolder, addFilesFromInput, resetLibrary, incrementPlayCount, exportUserData, importUserData } = useLibrary();
   // Pass callback to increment play count only when track actually finishes
   const {
+    audioRef,
     isPlaying,
     currentTime,
     duration,
