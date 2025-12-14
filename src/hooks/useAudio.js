@@ -15,8 +15,8 @@ export function useAudio(onTrackEnd) {
     const currentTrackRef = useRef(currentTrack);
     const onTrackEndRef = useRef(onTrackEnd);
 
-    // Track the current blob URL to revoke it
-    const currentBlobUrlRef = useRef(null);
+    const artworkUrlRef = useRef(null); // Ref for Media Session artwork URL
+    const currentBlobUrlRef = useRef(null); // Ref for audio source blob URL
 
     // Keep refs synced
     useEffect(() => {
@@ -25,8 +25,93 @@ export function useAudio(onTrackEnd) {
         onTrackEndRef.current = onTrackEnd;
     }, [queue, currentTrack, onTrackEnd]);
 
+    // Media Session API Integration
     useEffect(() => {
-        const audio = audioRef.current;
+        if (!('mediaSession' in navigator)) return;
+
+        const cleanupArtwork = () => {
+            if (artworkUrlRef.current) {
+                URL.revokeObjectURL(artworkUrlRef.current);
+                artworkUrlRef.current = null;
+            }
+        };
+
+        if (currentTrack) {
+            // Generate artwork URL if picture exists
+            let artwork = [];
+            cleanupArtwork(); // Clean previous one first
+
+            if (currentTrack.picture && currentTrack.picture instanceof Blob) {
+                try {
+                    const url = URL.createObjectURL(currentTrack.picture);
+                    artworkUrlRef.current = url;
+                    artwork = [
+                        { src: url, sizes: '512x512', type: currentTrack.picture.type }
+                    ];
+                } catch (e) {
+                    console.warn("Failed to create artwork URL for Media Session", e);
+                }
+            }
+
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: currentTrack.title || 'Unknown Title',
+                artist: currentTrack.artist || 'Unknown Artist',
+                album: currentTrack.album || 'Unknown Album',
+                artwork: artwork
+            });
+        } else {
+            navigator.mediaSession.metadata = null;
+            cleanupArtwork();
+        }
+
+        return cleanupArtwork;
+    }, [currentTrack]);
+
+    useEffect(() => {
+        if (!('mediaSession' in navigator)) return;
+
+        navigator.mediaSession.setActionHandler('play', () => {
+            // Use ref logic or togglePlay logic if stable
+            // Since we can't easily access 'togglePlay' safely if it depends on state that might be stale in a closure
+            // unless we re-register. But pure refs are safer.
+            // Actually, audioRef is stable.
+            audioRef.current.play().catch(e => console.error("Play failed", e));
+            setIsPlaying(true);
+        });
+        navigator.mediaSession.setActionHandler('pause', () => {
+            audioRef.current.pause();
+            setIsPlaying(false);
+        });
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+            playPrevious();
+        });
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+            playNext();
+        });
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+            if (details.seekTime !== undefined) {
+                seek(details.seekTime);
+            }
+        });
+
+        // Clear handlers on unmount
+        return () => {
+            navigator.mediaSession.setActionHandler('play', null);
+            navigator.mediaSession.setActionHandler('pause', null);
+            navigator.mediaSession.setActionHandler('previoustrack', null);
+            navigator.mediaSession.setActionHandler('nexttrack', null);
+            navigator.mediaSession.setActionHandler('seekto', null);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [queue]); // Re-bind when queue changes to ensure next/prev work correct (though they use refs internally in some designs, here playNext depends on queue/currentTrack state linkage)
+
+    useEffect(() => {
+        if (!('mediaSession' in navigator)) return;
+        navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+    }, [isPlaying]);
+
+    useEffect(() => {
+        const audio = audioRef.current; // Stable ref
 
         const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
         const handleDurationChange = () => setDuration(audio.duration);

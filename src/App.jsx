@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Layout } from './components/Layout';
 import { TrackList } from './components/TrackList';
-import { TileList } from './components/TileList';
-import { AlbumGrid } from './components/AlbumGrid';
-import { ArtistGrid } from './components/ArtistGrid';
-import { LibraryGraph } from './components/LibraryGraph';
+
 import { PlayerBar } from './components/PlayerBar';
 import { SettingsDialog } from './components/SettingsDialog';
 import { splitArtistString } from './utils/artistUtils';
 import { useLibrary } from './hooks/useLibrary';
 import { useAudio } from './hooks/useAudio';
-import { FolderPlus, LayoutList, LayoutGrid, Settings, X, Search, Disc, Users } from 'lucide-react';
+import { AlbumGrid } from './components/AlbumGrid';
+import { ArtistGrid } from './components/ArtistGrid';
+
+import { FolderPlus, Settings } from 'lucide-react';
 import { Box, Typography, Button, IconButton, ToggleButton, ToggleButtonGroup, LinearProgress, Chip, TextField, InputAdornment, Autocomplete } from '@mui/material';
 
 function App() {
@@ -35,7 +35,6 @@ function App() {
     }
   });
 
-  const [viewMode, setViewMode] = useState('list'); // 'list' or 'tile'
   const [libraryView, setLibraryView] = useState('songs'); // 'songs' | 'albums' | 'artists'
   const [filters, setFilters] = useState([]); // Array of { id, type, value }
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -328,7 +327,6 @@ function App() {
             }}
           />
 
-          {/* Library View Toggles */}
           <ToggleButtonGroup
             value={libraryView}
             exclusive
@@ -339,7 +337,6 @@ function App() {
             <ToggleButton value="songs">Songs</ToggleButton>
             <ToggleButton value="albums">Albums</ToggleButton>
             <ToggleButton value="artists">Artists</ToggleButton>
-            <ToggleButton value="graph">Graph</ToggleButton>
           </ToggleButtonGroup>
         </Box>
 
@@ -348,20 +345,6 @@ function App() {
             <Settings size={20} />
           </IconButton>
 
-          <ToggleButtonGroup
-            value={viewMode}
-            exclusive
-            onChange={(_, newView) => newView && setViewMode(newView)}
-            size="small"
-            sx={{ bgcolor: 'background.paper' }}
-          >
-            <ToggleButton value="list" aria-label="list view">
-              <LayoutList size={20} />
-            </ToggleButton>
-            <ToggleButton value="tile" aria-label="tile view">
-              <LayoutGrid size={20} />
-            </ToggleButton>
-          </ToggleButtonGroup>
 
           <Button
             variant="outlined"
@@ -398,16 +381,7 @@ function App() {
 
       {/* Main Content */}
       <Box sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-        {libraryView === 'graph' ? (
-          <LibraryGraph
-            tracks={filteredTracks}
-            onPlay={handlePlay}
-            onFilter={(type, val) => {
-              handleFilter(type, val);
-              setLibraryView('songs');
-            }}
-          />
-        ) : libraryView === 'albums' ? (
+        {libraryView === 'albums' ? (
           <Box sx={{ height: '100%', overflow: 'hidden' }}>
             <AlbumGrid
               albums={albums}
@@ -421,10 +395,8 @@ function App() {
               onSelect={handleArtistSelect}
             />
           </Box>
-        ) : viewMode === 'list' ? (
-          <TrackList tracks={filteredTracks} onPlay={handlePlay} onFilterChange={handleFilter} currentTrack={currentTrack} isPlaying={isPlaying} />
         ) : (
-          <TileList tracks={filteredTracks} onPlay={handlePlay} currentTrack={currentTrack} />
+          <TrackList tracks={filteredTracks} onPlay={handlePlay} onFilterChange={handleFilter} currentTrack={currentTrack} isPlaying={isPlaying} />
         )}
       </Box>
 
