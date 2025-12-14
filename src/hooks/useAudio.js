@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 export function useAudio(onTrackEnd) {
     const audioRef = useRef(new Audio());
@@ -74,57 +74,18 @@ export function useAudio(onTrackEnd) {
         navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
     }, [isPlaying]);
 
-    useEffect(() => {
-        const audio = audioRef.current; // Stable ref
 
-        const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
-        const handleDurationChange = () => setDuration(audio.duration);
-        const handleEnded = () => {
-            // Use refs to get latest state without re-binding listener
-            const currentQueue = queueRef.current;
-            const current = currentTrackRef.current;
 
-            if (current) {
-                // Trigger callback if provided
-                if (onTrackEndRef.current) {
-                    onTrackEndRef.current(current);
-                }
-            }
+    const togglePlay = useCallback(() => {
+        if (audioRef.current.paused) {
+            audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error);
+        } else {
+            audioRef.current.pause();
+            setIsPlaying(false);
+        }
+    }, []);
 
-            if (!current || currentQueue.length === 0) return;
-
-            const currentIndex = currentQueue.findIndex(t => t.id === current.id);
-            if (currentIndex === -1 || currentIndex === currentQueue.length - 1) {
-                setIsPlaying(false);
-                return;
-            }
-
-            // We can't call playTrack directly easily because it's async and depends on state
-            // But we can manually trigger the next track logic here
-            const nextTrack = currentQueue[currentIndex + 1];
-            playTrack(nextTrack);
-        };
-
-        audio.addEventListener('timeupdate', handleTimeUpdate);
-        audio.addEventListener('durationchange', handleDurationChange);
-        audio.addEventListener('ended', handleEnded);
-
-        return () => {
-            audio.removeEventListener('timeupdate', handleTimeUpdate);
-            audio.removeEventListener('durationchange', handleDurationChange);
-            audio.removeEventListener('ended', handleEnded);
-            audio.pause();
-            audio.src = '';
-
-            // Clean up any lingering blob URL on unmount
-            if (currentBlobUrlRef.current) {
-                URL.revokeObjectURL(currentBlobUrlRef.current);
-                currentBlobUrlRef.current = null;
-            }
-        };
-    }, []); // Changed back to empty array to avoid resetting audio on track/queue change
-
-    const playTrack = async (track, newQueue = null) => {
+    const playTrack = useCallback(async (track, newQueue = null) => {
         if (newQueue) {
             setQueue(newQueue);
             // Ref will update in effect, but for immediate sync in this function if we were to use it:
@@ -132,9 +93,10 @@ export function useAudio(onTrackEnd) {
         }
 
         const audio = audioRef.current;
+        const current = currentTrackRef.current;
 
         // 1. If same track, just update play/pause state
-        if (currentTrack?.id === track.id) {
+        if (current?.id === track.id) {
             togglePlay();
             return;
         }
@@ -210,91 +172,163 @@ export function useAudio(onTrackEnd) {
                 currentBlobUrlRef.current = null;
             }
         }
-    };
+    }, [togglePlay]);
 
-    const playNext = () => {
-        if (!currentTrack || queue.length === 0) return;
-        const currentIndex = queue.findIndex(t => t.id === currentTrack.id);
-        if (currentIndex === -1 || currentIndex === queue.length - 1) return; // End of playlist
-        playTrack(queue[currentIndex + 1]);
-    };
+    // Helper to get latest play state without closure staleness
+    const playNext = useCallback(() => {
+        const currentQueue = queueRef.current;
+        const current = currentTrackRef.current;
 
-    const playPrevious = () => {
+        if (!current || currentQueue.length === 0) return;
+
+        const currentIndex = currentQueue.findIndex(t => t.id === current.id);
+        if (currentIndex === -1 || currentIndex === currentQueue.length - 1) return; // End of playlist
+
+        // We need to call playTrack with the CORRECT object. 
+        // playTrack itself is stable-ish if it doesn't close over state, 
+        // but playTrack does close over queues in some versions? 
+        // Let's check playTrack definition. It uses `setQueue` but doesn't seem to rely on other state 
+        // except `currentTrack` (which we can fix there too) 
+        // Actually, playTrack (line 127) uses `currentTrack?.id` from closure.
+        // We should fix playTrack to be ref-aware or pass args.
+        playTrack(currentQueue[currentIndex + 1]);
+    }, [playTrack]); // playTrack needs to be stable or we need to fix playTrack too.
+
+    const playPrevious = useCallback(() => {
         // If > 3 seconds in, restart song
         if (audioRef.current.currentTime > 3) {
             audioRef.current.currentTime = 0;
             return;
         }
 
-        if (!currentTrack || queue.length === 0) return;
-        const currentIndex = queue.findIndex(t => t.id === currentTrack.id);
+        const currentQueue = queueRef.current;
+        const current = currentTrackRef.current;
+
+        if (!current || currentQueue.length === 0) return;
+
+        const currentIndex = currentQueue.findIndex(t => t.id === current.id);
         if (currentIndex <= 0) return; // Start of playlist
-        playTrack(queue[currentIndex - 1]);
-    };
 
-    const togglePlay = () => {
-        if (isPlaying) {
-            audioRef.current.pause();
-        } else {
-            audioRef.current.play();
+        playTrack(currentQueue[currentIndex - 1]);
+    }, [playTrack]);
+
+    const seek = useCallback((time) => {
+        if (Number.isFinite(time)) {
+            audioRef.current.currentTime = time;
+            setCurrentTime(time);
         }
-        setIsPlaying(!isPlaying);
-    };
+    }, []);
 
-    const seek = (time) => {
-        audioRef.current.currentTime = time;
-        setCurrentTime(time);
-    };
-
-    const changeVolume = (vol) => {
+    const changeVolume = useCallback((vol) => {
         audioRef.current.volume = vol;
         setVolume(vol);
-    };
+    }, []);
 
+    useEffect(() => {
+        const audio = audioRef.current; // Stable ref
+
+        const handleTimeUpdate = () => setCurrentTime(audio.currentTime);
+        const handleDurationChange = () => setDuration(audio.duration);
+        const handleEnded = () => {
+            // Use refs to get latest state without re-binding listener
+            const currentQueue = queueRef.current;
+            const current = currentTrackRef.current;
+
+            if (current) {
+                // Trigger callback if provided
+                if (onTrackEndRef.current) {
+                    onTrackEndRef.current(current);
+                }
+            }
+
+            if (!current || currentQueue.length === 0) return;
+
+            const currentIndex = currentQueue.findIndex(t => t.id === current.id);
+            if (currentIndex === -1 || currentIndex === currentQueue.length - 1) {
+                setIsPlaying(false);
+                return;
+            }
+
+            // We can't call playTrack directly easily because it's async and depends on state
+            // But we can manually trigger the next track logic here
+            const nextTrack = currentQueue[currentIndex + 1];
+            playTrack(nextTrack);
+        };
+
+        audio.addEventListener('timeupdate', handleTimeUpdate);
+        audio.addEventListener('durationchange', handleDurationChange);
+        audio.addEventListener('ended', handleEnded);
+
+        return () => {
+            audio.removeEventListener('timeupdate', handleTimeUpdate);
+            audio.removeEventListener('durationchange', handleDurationChange);
+            audio.removeEventListener('ended', handleEnded);
+            audio.pause();
+            audio.src = '';
+
+            // Clean up any lingering blob URL on unmount
+            if (currentBlobUrlRef.current) {
+                URL.revokeObjectURL(currentBlobUrlRef.current);
+                currentBlobUrlRef.current = null;
+            }
+        };
+    }, [playTrack]); // Changed back to empty array to avoid resetting audio on track/queue change
+
+    // Stabilize Media Session Action Handlers
     useEffect(() => {
         if (!('mediaSession' in navigator)) return;
 
-        navigator.mediaSession.setActionHandler('play', async () => {
-            // If we're paused, try to play
+        // We use the refs inside these wrappers so the handlers themselves are stable 
+        // and don't need to be re-set when state changes.
+        // playNext/playPrevious above are now using refs, so they are safe to call.
+
+        const handlePlay = async () => {
             try {
                 await audioRef.current.play();
                 setIsPlaying(true);
             } catch (e) {
                 console.error("Play failed in media session", e);
             }
-        });
-        navigator.mediaSession.setActionHandler('pause', () => {
+        };
+
+        const handlePause = () => {
             audioRef.current.pause();
             setIsPlaying(false);
-        });
-        navigator.mediaSession.setActionHandler('previoustrack', () => {
-            playPrevious();
-        });
-        navigator.mediaSession.setActionHandler('nexttrack', () => {
-            playNext();
-        });
-        navigator.mediaSession.setActionHandler('seekto', (details) => {
+        };
+
+        const handlePrevioustrack = () => playPrevious();
+        const handleNexttrack = () => playNext();
+
+        const handleSeekTo = (details) => {
             if (details.seekTime !== undefined) {
                 seek(details.seekTime);
             }
-        });
+        };
 
-        // Explicitly clear others to avoid OS thinking we support them?
-        // Actually, setting them usually enables them. 
-        // Note: 'seekbackward', 'seekforward' are often auto-enabled if seekto is not present, or vice versa?
-        // Setting them to null ensures they are not "handled" by us, so browsers might show them or not.
-        // User saw "10s skip". That usually appears if previoustrack/nexttrack are missing.
-        // By setting these here, we should see the correct buttons.
+        navigator.mediaSession.setActionHandler('play', handlePlay);
+        navigator.mediaSession.setActionHandler('pause', handlePause);
+        navigator.mediaSession.setActionHandler('previoustrack', handlePrevioustrack);
+        navigator.mediaSession.setActionHandler('nexttrack', handleNexttrack);
+        navigator.mediaSession.setActionHandler('seekto', handleSeekTo);
+
+        // Optional: Support seekbackward/seekforward for 10s skips if desired
+        // navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        //    const skipTime = details.seekOffset || 10;
+        //    seek(Math.max(audioRef.current.currentTime - skipTime, 0));
+        // });
+        // navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        //    const skipTime = details.seekOffset || 10;
+        //    seek(Math.min(audioRef.current.currentTime + skipTime, audioRef.current.duration));
+        // });
 
         return () => {
-            // Unregister on cleanup (re-dependency update)
             navigator.mediaSession.setActionHandler('play', null);
             navigator.mediaSession.setActionHandler('pause', null);
             navigator.mediaSession.setActionHandler('previoustrack', null);
             navigator.mediaSession.setActionHandler('nexttrack', null);
             navigator.mediaSession.setActionHandler('seekto', null);
         };
-    }, [playNext, playPrevious, seek]); // Re-bind when queue/track changes (playNext changes)
+    }, [playNext, playPrevious, seek]); // These dependencies should now be stable thanks to useCallback
 
     return {
         isPlaying,
