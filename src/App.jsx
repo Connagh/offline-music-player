@@ -16,6 +16,7 @@ function App() {
   const { tracks, isScanning, progress, addFolder, addFilesFromInput, resetLibrary, incrementPlayCount, exportUserData, importUserData } = useLibrary();
   // Pass callback to increment play count only when track actually finishes
   const {
+    audioRef,
     isPlaying,
     currentTime,
     duration,
@@ -243,6 +244,13 @@ function App() {
           directory=""
           multiple
           style={{ display: 'none' }}
+        />
+
+        {/* Hidden Audio Element for iOS/Background Persistence */}
+        <audio
+          ref={audioRef}
+          style={{ display: 'none' }}
+          playsInline // Critical for iOS
         />
       </Box>
 
