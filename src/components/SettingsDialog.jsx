@@ -1,9 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Typography, Box, List, ListItem, ListItemText, ListItemIcon, Divider, Alert } from '@mui/material';
-import { RefreshCw, Trash2, FolderPlus, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Trash2, FolderPlus, AlertTriangle, HardDrive } from 'lucide-react';
+
+function formatBytes(bytes, decimals = 2) {
+    if (!+bytes) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+}
 
 export function SettingsDialog({ open, onClose, onReset, onExport, onImport }) {
     const [confirmReset, setConfirmReset] = useState(false);
+    const [storageUsage, setStorageUsage] = useState(null);
+
+    useEffect(() => {
+        if (open && 'storage' in navigator && 'estimate' in navigator.storage) {
+            navigator.storage.estimate().then(estimate => {
+                setStorageUsage(estimate.usage);
+            }).catch(e => console.error("Storage estimate failed:", e));
+        }
+    }, [open]);
 
     const handleClose = () => {
         setConfirmReset(false);
@@ -14,6 +32,7 @@ export function SettingsDialog({ open, onClose, onReset, onExport, onImport }) {
         if (confirmReset) {
             onReset();
             setConfirmReset(false);
+            setStorageUsage(0); // Optimistically clear
         } else {
             setConfirmReset(true);
         }
@@ -24,6 +43,26 @@ export function SettingsDialog({ open, onClose, onReset, onExport, onImport }) {
             <DialogTitle>Settings</DialogTitle>
             <DialogContent>
                 <List>
+                    {/* Storage Info */}
+                    <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                            <ListItemIcon sx={{ minWidth: 40 }}>
+                                <HardDrive size={24} color="#a1a1aa" />
+                            </ListItemIcon>
+                            <ListItemText
+                                primary="Storage Used"
+                                secondary={storageUsage !== null ? formatBytes(storageUsage) : "Calculating..."}
+                            />
+                        </Box>
+                        {storageUsage > 100 * 1024 * 1024 && (
+                            <Alert severity="info" size="small" variant="outlined">
+                                High storage usage helps verify that your music is saved locally in this browser.
+                            </Alert>
+                        )}
+                    </ListItem>
+
+                    <Divider variant="inset" component="li" />
+
                     {/* Data Management */}
                     <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 2 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -38,10 +77,7 @@ export function SettingsDialog({ open, onClose, onReset, onExport, onImport }) {
                         <Box sx={{ display: 'flex', gap: 2, paddingLeft: 7 }}>
                             <Button
                                 variant="outlined"
-                                startIcon={<RefreshCw size={16} />} // Reuse RefreshCw as 'Sync' icon substitute or Import? Upload is better but I don't have it imported.
-                                // Actually let's just use text for clarity or import 'Upload'/'Download' from lucide if available.
-                                // I'll use FolderPlus for Import maybe? And something else for Export.
-                                // Let's just use Text for now to be safe on imports, or reuse existing.
+                                startIcon={<RefreshCw size={16} />}
                                 onClick={onExport}
                             >
                                 Export Data
@@ -67,7 +103,6 @@ export function SettingsDialog({ open, onClose, onReset, onExport, onImport }) {
                     </ListItem>
 
                     <Divider variant="inset" component="li" />
-
 
                     <ListItem sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 2 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
