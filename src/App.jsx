@@ -219,7 +219,7 @@ function App() {
         }}>
           {/* Top Row: Title + Settings */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <img src="/logo.png" alt="Offline" style={{ height: 16, objectFit: 'contain' }} />
+            <img src={`${import.meta.env.BASE_URL}offline-logo.png`} alt="Offline" style={{ height: 16, objectFit: 'contain' }} />
             <Box sx={{ display: 'flex', gap: 1 }}>
               <IconButton size="small" onClick={() => setSettingsOpen(true)}>
                 <Settings size={20} />
@@ -305,6 +305,7 @@ function App() {
             multiple
             style={{ display: 'none' }}
           />
+
         </Box>
       </Box>
 
