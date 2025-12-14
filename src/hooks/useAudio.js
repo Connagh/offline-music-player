@@ -26,9 +26,9 @@ export function useAudio(onTrackEnd) {
     }, [queue, currentTrack, onTrackEnd]);
 
     // Media Session API Integration
-    useEffect(() => {
-        if (!('mediaSession' in navigator)) return;
 
+    // 1. Manage Artwork Blob URL Lifecycle
+    useEffect(() => {
         const cleanupArtwork = () => {
             if (artworkUrlRef.current) {
                 URL.revokeObjectURL(artworkUrlRef.current);
@@ -36,23 +36,41 @@ export function useAudio(onTrackEnd) {
             }
         };
 
-        if (currentTrack) {
-            // Generate artwork URL if picture exists
-            let artwork = [];
-            cleanupArtwork(); // Clean previous one first
+        if (currentTrack?.picture && currentTrack.picture instanceof Blob) {
+            cleanupArtwork();
+            try {
+                artworkUrlRef.current = URL.createObjectURL(currentTrack.picture);
+            } catch (e) {
+                console.warn("Failed to create artwork URL", e);
+            }
+        } else if (!currentTrack) {
+            cleanupArtwork();
+        }
 
-            if (currentTrack.picture && currentTrack.picture instanceof Blob) {
-                try {
-                    const url = URL.createObjectURL(currentTrack.picture);
-                    artworkUrlRef.current = url;
-                    artwork = [
-                        { src: url, sizes: '512x512', type: currentTrack.picture.type }
-                    ];
-                } catch (e) {
-                    console.warn("Failed to create artwork URL for Media Session", e);
-                }
+        return cleanupArtwork;
+    }, [currentTrack]);
+
+    // 2. Sync Media Session Metadata & State
+    useEffect(() => {
+        if (!('mediaSession' in navigator)) return;
+
+        navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+
+        if (currentTrack) {
+            // Construct artwork array using the stable ref
+            let artwork = [];
+            if (artworkUrlRef.current && currentTrack.picture) {
+                artwork = [
+                    {
+                        src: artworkUrlRef.current,
+                        sizes: '512x512',
+                        type: currentTrack.picture.type || 'image/jpeg'
+                    }
+                ];
             }
 
+            // Always update metadata when track or playing state changes
+            // This ensures it persists even if browser clears it (e.g. after pause/play cycle)
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: currentTrack.title || 'Unknown Title',
                 artist: currentTrack.artist || 'Unknown Artist',
@@ -61,18 +79,18 @@ export function useAudio(onTrackEnd) {
             });
         } else {
             navigator.mediaSession.metadata = null;
-            cleanupArtwork();
         }
 
-        return cleanupArtwork;
-    }, [currentTrack]);
+        // Optional: Update position state if needed for perfect integration
+        // if (duration > 0) {
+        //     navigator.mediaSession.setPositionState({
+        //         duration: duration,
+        //         playbackRate: 1.0,
+        //         position: currentTime
+        //     });
+        // }
 
-
-
-    useEffect(() => {
-        if (!('mediaSession' in navigator)) return;
-        navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
-    }, [isPlaying]);
+    }, [currentTrack, isPlaying]); // Update on isPlaying to force-refresh metadata on Chrome if needed
 
 
 
@@ -275,12 +293,10 @@ export function useAudio(onTrackEnd) {
     }, [playTrack]); // Changed back to empty array to avoid resetting audio on track/queue change
 
     // Stabilize Media Session Action Handlers
+    // We re-register handlers when currentTrack changes because some browsers (especially iOS) 
+    // might reset the session or handlers when the audio source changes.
     useEffect(() => {
         if (!('mediaSession' in navigator)) return;
-
-        // We use the refs inside these wrappers so the handlers themselves are stable 
-        // and don't need to be re-set when state changes.
-        // playNext/playPrevious above are now using refs, so they are safe to call.
 
         const handlePlay = async () => {
             try {
@@ -305,21 +321,20 @@ export function useAudio(onTrackEnd) {
             }
         };
 
+        // Register handlers
         navigator.mediaSession.setActionHandler('play', handlePlay);
         navigator.mediaSession.setActionHandler('pause', handlePause);
         navigator.mediaSession.setActionHandler('previoustrack', handlePrevioustrack);
         navigator.mediaSession.setActionHandler('nexttrack', handleNexttrack);
         navigator.mediaSession.setActionHandler('seekto', handleSeekTo);
 
-        // Optional: Support seekbackward/seekforward for 10s skips if desired
-        // navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-        //    const skipTime = details.seekOffset || 10;
-        //    seek(Math.max(audioRef.current.currentTime - skipTime, 0));
-        // });
-        // navigator.mediaSession.setActionHandler('seekforward', (details) => {
-        //    const skipTime = details.seekOffset || 10;
-        //    seek(Math.min(audioRef.current.currentTime + skipTime, audioRef.current.duration));
-        // });
+        // Explicitly start playing or paused? 
+        // No, playbackState is handled in another effect.
+
+        // CRITICAL FOR IOS: Explicitly disable seekbackward/seekforward to force Next/Prev buttons
+        // if they are appearing as 10s skips.
+        navigator.mediaSession.setActionHandler('seekbackward', null);
+        navigator.mediaSession.setActionHandler('seekforward', null);
 
         return () => {
             navigator.mediaSession.setActionHandler('play', null);
@@ -327,8 +342,11 @@ export function useAudio(onTrackEnd) {
             navigator.mediaSession.setActionHandler('previoustrack', null);
             navigator.mediaSession.setActionHandler('nexttrack', null);
             navigator.mediaSession.setActionHandler('seekto', null);
+            // We don't need to null seekbackward/seekforward strictly, but good practice
+            navigator.mediaSession.setActionHandler('seekbackward', null);
+            navigator.mediaSession.setActionHandler('seekforward', null);
         };
-    }, [playNext, playPrevious, seek]); // These dependencies should now be stable thanks to useCallback
+    }, [currentTrack, playNext, playPrevious, seek]);
 
     return {
         isPlaying,
