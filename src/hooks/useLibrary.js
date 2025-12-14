@@ -194,6 +194,30 @@ export function useLibrary() {
         });
     }, []);
 
+    const toggleLike = useCallback((trackId) => {
+        setTracks(prev => {
+            const trackIndex = prev.findIndex(t => t.id === trackId);
+            if (trackIndex === -1) return prev;
+
+            const updated = [...prev];
+            const track = { ...updated[trackIndex] };
+            track.liked = !track.liked;
+            updated[trackIndex] = track;
+
+            // Save logic
+            const tracksToSave = updated.map(t => {
+                if (t.handle) {
+                    const { file, ...rest } = t;
+                    return { ...rest, file: null };
+                }
+                return t;
+            });
+
+            set('music-tracks', tracksToSave).catch(e => console.error("Error saving likes to IDB:", e));
+            return updated;
+        });
+    }, []);
+
     const exportUserData = useCallback(() => {
         const data = {
             version: 1,
@@ -279,5 +303,5 @@ export function useLibrary() {
         }
     }, []);
 
-    return { tracks, isScanning, progress, addFolder, addFilesFromInput, resetLibrary, incrementPlayCount, exportUserData, importUserData };
+    return { tracks, isScanning, progress, addFolder, addFilesFromInput, resetLibrary, incrementPlayCount, toggleLike, exportUserData, importUserData };
 }

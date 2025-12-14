@@ -12,11 +12,11 @@ import { useLibrary } from './hooks/useLibrary';
 import { useAudio } from './hooks/useAudio';
 
 
-import { FolderPlus, Settings } from 'lucide-react';
+import { FolderPlus, Settings, Heart } from 'lucide-react';
 import { Box, Typography, Button, IconButton, ToggleButton, ToggleButtonGroup, LinearProgress, Chip, TextField, InputAdornment, Autocomplete, ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 
 function App() {
-  const { tracks, isScanning, progress, addFolder, addFilesFromInput, resetLibrary, incrementPlayCount, exportUserData, importUserData } = useLibrary();
+  const { tracks, isScanning, progress, addFolder, addFilesFromInput, resetLibrary, incrementPlayCount, toggleLike, exportUserData, importUserData } = useLibrary();
   // Pass callback to increment play count only when track actually finishes
   const {
     audioRef,
@@ -30,7 +30,9 @@ function App() {
     playPrevious,
     togglePlay,
     seek,
-    changeVolume
+    changeVolume,
+    isShuffle,
+    toggleShuffle
   } = useAudio((finishedTrack) => {
     // Callback from useAudio when a track ends naturally
     if (finishedTrack) {
@@ -130,6 +132,9 @@ function App() {
         if (filter.type === 'album') {
           return track.album.toLowerCase() === filter.value.toLowerCase();
         }
+        if (filter.type === 'likes') {
+          return track.liked;
+        }
         return true;
       });
     });
@@ -170,7 +175,7 @@ function App() {
   const theme = useMemo(() => createTheme({
     palette: {
       mode: themeMode,
-      primary: { main: '#3b82f6' },
+      primary: { main: '#FCA957' },
       secondary: { main: '#8b5cf6' },
       background: {
         default: themeMode === 'dark' ? '#09090b' : '#ffffff',
@@ -206,7 +211,7 @@ function App() {
       }}>
         <Box sx={{
           width: '100%',
-          maxWidth: 412, // Maintain mobile width for internal content
+          // maxWidth: 412, // Removed max width
           p: 2,
           display: 'flex',
           flexDirection: 'column',
@@ -214,7 +219,7 @@ function App() {
         }}>
           {/* Top Row: Title + Settings */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>Music</Typography>
+            <img src="/logo.png" alt="Offline" style={{ height: 16, objectFit: 'contain' }} />
             <Box sx={{ display: 'flex', gap: 1 }}>
               <IconButton size="small" onClick={() => setSettingsOpen(true)}>
                 <Settings size={20} />
@@ -225,50 +230,70 @@ function App() {
             </Box>
           </Box>
 
-          {/* Search Bar */}
-          <Autocomplete
-            multiple
-            freeSolo
-            id="library-search"
-            options={searchOptions}
-            getOptionLabel={(option) => {
-              if (typeof option === 'string') return option;
-              return option.label;
-            }}
-            value={calculateAutocompleteValue}
-            onChange={handleAutocompleteChange}
-            isOptionEqualToValue={(option, value) => option.type === value.type && option.label === value.label}
-            renderTags={(value, getTagProps) =>
-              value.map((option, index) => {
-                const { key, ...tagProps } = getTagProps({ index });
-                return (
-                  <Chip
-                    key={key}
-                    variant="filled"
-                    label={`${option.label}`}
-                    size="small"
-                    color="primary"
-                    {...tagProps}
-                  />
-                );
-              })
-            }
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                variant="outlined"
-                placeholder={filters.length > 0 ? "" : "Search songs, artists..."}
-                size="small"
-                fullWidth
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 3,
-                    bgcolor: 'background.paper'
-                  }
+          {/* Search Bar + Likes Row */}
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <Box sx={{ flex: 1 }}>
+              <Autocomplete
+                multiple
+                freeSolo
+                id="library-search"
+                options={searchOptions}
+                getOptionLabel={(option) => {
+                  if (typeof option === 'string') return option;
+                  return option.label;
                 }}
+                value={calculateAutocompleteValue}
+                onChange={handleAutocompleteChange}
+                isOptionEqualToValue={(option, value) => option.type === value.type && option.label === value.label}
+                renderTags={(value, getTagProps) =>
+                  value.map((option, index) => {
+                    const { key, ...tagProps } = getTagProps({ index });
+                    return (
+                      <Chip
+                        key={key}
+                        variant="filled"
+                        label={`${option.label}`}
+                        size="small"
+                        color="primary"
+                        {...tagProps}
+                      />
+                    );
+                  })
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    variant="outlined"
+                    placeholder={filters.length > 0 ? "" : "Search..."}
+                    size="small"
+                    fullWidth
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: 3,
+                        bgcolor: 'background.paper'
+                      }
+                    }}
+                  />
+                )}
               />
-            )}
-          />
+            </Box>
+
+            {/* Likes Filter Chip */}
+            <Chip
+              clickable
+              label="Likes"
+              color={filters.some(f => f.type === 'likes') ? "primary" : "default"}
+              variant={filters.some(f => f.type === 'likes') ? "filled" : "outlined"}
+              onClick={() => {
+                const isLikesFilterActive = filters.some(f => f.type === 'likes');
+                if (isLikesFilterActive) {
+                  setFilters(prev => prev.filter(f => f.type !== 'likes'));
+                } else {
+                  setFilters(prev => [...prev, { id: 'likes', type: 'likes', value: 'Likes' }]);
+                }
+              }}
+            />
+          </Box>
 
           {/* Hidden File Input */}
           <input
@@ -287,12 +312,13 @@ function App() {
       {/* Header is roughly 120px tall, Footer is 140px tall. Adding padding to body content */}
       <Box sx={{
         flex: 1,
+        width: '100%',
         overflow: 'hidden',
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
-        pt: '130px', // Space for fixed header
-        pb: '140px', // Space for fixed footer
+        pt: '120px', // Space for fixed header
+        pb: '121px', // Space for fixed footer (105) + Dead Zone (16)
       }}>
         {isScanning && (
           <Box sx={{ px: 2, py: 1, bgcolor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider' }}>
@@ -305,8 +331,17 @@ function App() {
             <LinearProgress variant="determinate" value={progress.total > 0 ? (progress.current / progress.total) * 100 : 0} sx={{ height: 2, borderRadius: 1 }} />
           </Box>
         )}
-        <TrackList tracks={filteredTracks} onPlay={handlePlay} onFilterChange={handleFilter} currentTrack={currentTrack} isPlaying={isPlaying} />
+        <TrackList tracks={filteredTracks} onPlay={handlePlay} onFilter={handleFilter} currentTrack={currentTrack} isPlaying={isPlaying} />
       </Box>
+
+      <Box sx={{
+        position: 'fixed',
+        bottom: 105, // Height of player bar
+        left: 0,
+        right: 0,
+        height: 16,
+        zIndex: 19, // Below player bar (20), above content
+      }} />
 
       {/* Player Bar - Anchored Fixed Bottom */}
       <Box sx={{
@@ -321,7 +356,7 @@ function App() {
         borderTop: '1px solid',
         borderColor: 'divider',
       }}>
-        <Box sx={{ width: '100%', maxWidth: 412 }}>
+        <Box sx={{ width: '100%' }}>
           <PlayerBar
             isPlaying={isPlaying}
             onTogglePlay={togglePlay}
@@ -334,6 +369,10 @@ function App() {
             onFilter={handleFilter}
             onNext={() => playNext()}
             onPrevious={() => playPrevious()}
+            isLiked={currentTrack ? tracks.find(t => t.id === currentTrack.id)?.liked : false}
+            onLikeToggle={() => currentTrack && toggleLike(currentTrack.id)}
+            isShuffle={isShuffle}
+            onToggleShuffle={toggleShuffle}
           />
         </Box>
       </Box>

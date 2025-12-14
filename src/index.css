@@ -23,8 +23,9 @@ body {
 }
 
 #root {
-  max-width: 412px;
-  margin: 0 auto;
+  width: 100%;
+  /* max-width: 412px; */
+  /* margin: 0 auto; */
   background-color: var(--bg-main);
   height: 100vh;
   /* Changed from min-height to height for flex child expansion */

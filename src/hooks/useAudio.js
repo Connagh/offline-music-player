@@ -136,6 +136,13 @@ export function useAudio(onTrackEnd) {
         navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
     }, [isPlaying]);
 
+    const [history, setHistory] = useState([]);
+    const historyRef = useRef(history);
+
+    useEffect(() => {
+        historyRef.current = history;
+    }, [history]);
+
     const togglePlay = useCallback(() => {
         if (!audioRef.current) return;
         if (audioRef.current.paused) {
@@ -146,7 +153,9 @@ export function useAudio(onTrackEnd) {
         }
     }, []);
 
-    const playTrack = useCallback(async (track, newQueue = null) => {
+    const playTrack = useCallback(async (track, newQueue = null, options = {}) => {
+        const { skipHistory = false } = options;
+
         if (!audioRef.current) return;
         if (newQueue) {
             setQueue(newQueue);
@@ -162,6 +171,13 @@ export function useAudio(onTrackEnd) {
         if (current?.id === track.id) {
             togglePlay();
             return;
+        }
+
+        // ADDED: Shuffle History Logic
+        // If we have a current track and we aren't skipping history (e.g. going back),
+        // add the current track to history.
+        if (current && !skipHistory) {
+            setHistory(prev => [...prev, current]);
         }
 
         let url = null;
@@ -277,6 +293,15 @@ export function useAudio(onTrackEnd) {
         }
     }, [togglePlay]);
 
+    const [isShuffle, setIsShuffle] = useState(false);
+    const isShuffleRef = useRef(isShuffle);
+
+    useEffect(() => {
+        isShuffleRef.current = isShuffle;
+    }, [isShuffle]);
+
+    const toggleShuffle = useCallback(() => setIsShuffle(p => !p), []);
+
     // Helper to get latest play state without closure staleness
     const playNext = useCallback(() => {
         const currentQueue = queueRef.current;
@@ -284,16 +309,16 @@ export function useAudio(onTrackEnd) {
 
         if (!current || currentQueue.length === 0) return;
 
+        if (isShuffleRef.current) {
+            // Shuffle Logic: Pick random
+            const nextIndex = Math.floor(Math.random() * currentQueue.length);
+            playTrack(currentQueue[nextIndex]);
+            return;
+        }
+
         const currentIndex = currentQueue.findIndex(t => t.id === current.id);
         if (currentIndex === -1 || currentIndex === currentQueue.length - 1) return; // End of playlist
 
-        // We need to call playTrack with the CORRECT object. 
-        // playTrack itself is stable-ish if it doesn't close over state, 
-        // but playTrack does close over queues in some versions? 
-        // Let's check playTrack definition. It uses `setQueue` but doesn't seem to rely on other state 
-        // except `currentTrack` (which we can fix there too) 
-        // Actually, playTrack (line 127) uses `currentTrack?.id` from closure.
-        // We should fix playTrack to be ref-aware or pass args.
         playTrack(currentQueue[currentIndex + 1]);
     }, [playTrack]); // playTrack needs to be stable or we need to fix playTrack too.
 
@@ -308,7 +333,19 @@ export function useAudio(onTrackEnd) {
         const currentQueue = queueRef.current;
         const current = currentTrackRef.current;
 
-        if (!current || currentQueue.length === 0) return;
+        if (!current) return;
+
+        // ADDED: Shuffle History Check
+        if (isShuffleRef.current && historyRef.current.length > 0) {
+            const newHistory = [...historyRef.current];
+            const previousTrack = newHistory.pop();
+
+            setHistory(newHistory); // Update history state
+            playTrack(previousTrack, null, { skipHistory: true });
+            return;
+        }
+
+        if (currentQueue.length === 0) return;
 
         const currentIndex = currentQueue.findIndex(t => t.id === current.id);
         if (currentIndex <= 0) return; // Start of playlist
@@ -450,6 +487,8 @@ export function useAudio(onTrackEnd) {
         playPrevious,
         togglePlay,
         seek,
-        changeVolume
+        changeVolume,
+        isShuffle,
+        toggleShuffle
     };
 }

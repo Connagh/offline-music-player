@@ -3,6 +3,7 @@ import { Music } from 'lucide-react';
 import { Virtuoso } from 'react-virtuoso';
 import { Box, Typography, Chip } from '@mui/material';
 import { ArtistLinks } from './ArtistLinks';
+import { WelcomeGuide } from './WelcomeGuide';
 
 const CoverImage = React.memo(({ blob }) => {
     const [src, setSrc] = React.useState(null);
@@ -127,11 +128,33 @@ export function TrackList({ tracks, onPlay, onFilter, currentTrack }) {
         );
     };
 
+    const virtuosoRef = React.useRef(null);
+
+    // Scroll to active track when it changes
+    React.useEffect(() => {
+        if (currentTrack && virtuosoRef.current) {
+            const index = sortedTracks.findIndex(t => t.id === currentTrack.id);
+            if (index !== -1) {
+                virtuosoRef.current.scrollToIndex({ index, align: 'center', behavior: 'smooth' });
+            }
+        }
+    }, [currentTrack, sortedTracks]);
+
+    // Scroll to top only when sort changes
+    React.useEffect(() => {
+        virtuosoRef.current?.scrollToIndex({ index: 0 });
+    }, [sortConfig]);
+
     return (
-        <Virtuoso
-            style={{ height: '100%' }}
-            data={sortedTracks}
-            itemContent={itemContent}
-        />
+        sortedTracks.length === 0 ? (
+            <WelcomeGuide />
+        ) : (
+            <Virtuoso
+                ref={virtuosoRef}
+                style={{ height: '100%' }}
+                data={sortedTracks}
+                itemContent={itemContent}
+            />
+        )
     );
 }
