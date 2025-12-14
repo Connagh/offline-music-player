@@ -67,47 +67,7 @@ export function useAudio(onTrackEnd) {
         return cleanupArtwork;
     }, [currentTrack]);
 
-    // Ref to hold latest version of functions to avoid stale closures in Media Session handlers
-    const handlersRef = useRef({}); // Initialize empty to avoid ReferenceError
 
-
-    useEffect(() => {
-        if (!('mediaSession' in navigator)) return;
-
-        navigator.mediaSession.setActionHandler('play', async () => {
-            try {
-                // Resume playback
-                await audioRef.current.play();
-                setIsPlaying(true);
-            } catch (e) {
-                console.error("Play failed", e);
-            }
-        });
-        navigator.mediaSession.setActionHandler('pause', () => {
-            audioRef.current.pause();
-            setIsPlaying(false);
-        });
-        navigator.mediaSession.setActionHandler('previoustrack', () => {
-            handlersRef.current.playPrevious();
-        });
-        navigator.mediaSession.setActionHandler('nexttrack', () => {
-            handlersRef.current.playNext();
-        });
-        navigator.mediaSession.setActionHandler('seekto', (details) => {
-            if (details.seekTime !== undefined) {
-                handlersRef.current.seek(details.seekTime);
-            }
-        });
-
-        // Clear handlers on unmount
-        return () => {
-            navigator.mediaSession.setActionHandler('play', null);
-            navigator.mediaSession.setActionHandler('pause', null);
-            navigator.mediaSession.setActionHandler('previoustrack', null);
-            navigator.mediaSession.setActionHandler('nexttrack', null);
-            navigator.mediaSession.setActionHandler('seekto', null);
-        };
-    }, []); // Only bind once
 
     useEffect(() => {
         if (!('mediaSession' in navigator)) return;
@@ -291,10 +251,50 @@ export function useAudio(onTrackEnd) {
         setVolume(vol);
     };
 
-    // Update handlers ref when functions change (or on every render if they are unstable)
     useEffect(() => {
-        handlersRef.current = { playNext, playPrevious, seek };
-    }, [playNext, playPrevious, seek]);
+        if (!('mediaSession' in navigator)) return;
+
+        navigator.mediaSession.setActionHandler('play', async () => {
+            // If we're paused, try to play
+            try {
+                await audioRef.current.play();
+                setIsPlaying(true);
+            } catch (e) {
+                console.error("Play failed in media session", e);
+            }
+        });
+        navigator.mediaSession.setActionHandler('pause', () => {
+            audioRef.current.pause();
+            setIsPlaying(false);
+        });
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+            playPrevious();
+        });
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+            playNext();
+        });
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+            if (details.seekTime !== undefined) {
+                seek(details.seekTime);
+            }
+        });
+
+        // Explicitly clear others to avoid OS thinking we support them?
+        // Actually, setting them usually enables them. 
+        // Note: 'seekbackward', 'seekforward' are often auto-enabled if seekto is not present, or vice versa?
+        // Setting them to null ensures they are not "handled" by us, so browsers might show them or not.
+        // User saw "10s skip". That usually appears if previoustrack/nexttrack are missing.
+        // By setting these here, we should see the correct buttons.
+
+        return () => {
+            // Unregister on cleanup (re-dependency update)
+            navigator.mediaSession.setActionHandler('play', null);
+            navigator.mediaSession.setActionHandler('pause', null);
+            navigator.mediaSession.setActionHandler('previoustrack', null);
+            navigator.mediaSession.setActionHandler('nexttrack', null);
+            navigator.mediaSession.setActionHandler('seekto', null);
+        };
+    }, [playNext, playPrevious, seek]); // Re-bind when queue/track changes (playNext changes)
 
     return {
         isPlaying,
